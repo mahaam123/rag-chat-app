@@ -70,3 +70,17 @@ def rag_answer(question, k_retrieve=20, k_rerank=5):
     answer = llm.invoke(prompt.format(context=context_text, question=question))
     sources = [{"page": doc.metadata.get("page_number"), "text": doc.page_content} for doc in top]
     return answer, sources
+
+def rag_answer_stream(question, k_retrieve=20, k_rerank=5):
+    # retrieve + rerank (same as before)
+    candidates = vectorstore.similarity_search(question, k=k_retrieve)
+    pairs = [(question, doc.page_content) for doc in candidates]
+    scores = reranker.predict(pairs)
+    ranked = sorted(zip(scores, candidates), key=lambda x: x[0], reverse=True)
+    top = [doc for score, doc in ranked[:k_rerank]]
+    context_text = "\n\n---\n\n".join(doc.page_content for doc in top)
+    final_prompt = prompt.format(context=context_text, question=question)
+
+    # stream the answer token by token
+    for chunk in llm.stream(final_prompt):
+        yield chunk
