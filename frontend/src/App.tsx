@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, ShieldCheck } from "lucide-react"
+import ReactMarkdown from "react-markdown"
 
 type Message = { role: "user" | "assistant"; text: string }
 
@@ -60,8 +61,8 @@ function App() {
                   <div className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80 mb-1.5">
                     Assistant
                   </div>
-                  <div className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">
-                    {msg.text}
+                  <div className="text-sm leading-relaxed text-slate-200 prose-chat">
+                    <ReactMarkdown>{msg.text}</ReactMarkdown>
                   </div>
                 </div>
               )}
