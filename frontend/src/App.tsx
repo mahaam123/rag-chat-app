@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, ShieldCheck, Plus, MessageSquare, Trash2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
+import { Joyride } from "react-joyride"
 
 type Message = { role: "user" | "assistant"; text: string }
 type Conversation = { id: number; title: string; created_at: string }
@@ -18,6 +19,22 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const [runTour, setRunTour] = useState(false)
+
+  useEffect(() => {
+    const seen = localStorage.getItem("tourSeen")
+    if (!seen) {
+      setRunTour(true)
+      localStorage.setItem("tourSeen", "true")
+    }
+  }, [])
+
+  const tourSteps = [
+    { target: ".tour-sidebar", content: "Your past conversations are saved here. Click any to resume it.", placement: "right" as const },
+    { target: ".tour-newchat", content: "Start a fresh conversation anytime.", placement: "right" as const },
+    { target: ".tour-input", content: "Type your question about the CIS Controls here and press Enter.", placement: "top" as const },
+    { target: ".tour-send", content: "Send your message — the answer streams in live.", placement: "top" as const },
+  ]
 
   useEffect(() => { fetchConversations() }, [])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
@@ -140,12 +157,27 @@ function App() {
 
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100">
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous
+        options={{
+          buttons: ['back', 'primary', 'skip'],
+          primaryColor: "#06b6d4",
+          backgroundColor: "#1e293b",
+          textColor: "#e2e8f0",
+          arrowColor: "#1e293b",
+        }}
+        locale={{
+          last: "Done",
+        }}
+      />
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 border-r border-slate-700/60 flex flex-col">
+      <aside className="w-64 shrink-0 border-r border-slate-700/60 flex flex-col tour-sidebar">
         <div className="p-3">
           <button
             onClick={newChat}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-sm font-medium"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-sm font-medium tour-newchat"
           >
             <Plus className="w-4 h-4" /> New chat
           </button>
@@ -219,9 +251,9 @@ function App() {
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               placeholder="Ask about a control, safeguard, or implementation group…"
               disabled={loading || streaming}
-              className="flex-1 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500 focus-visible:ring-cyan-400/40"
+              className="flex-1 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500 focus-visible:ring-cyan-400/40 tour-input"
             />
-            <Button onClick={sendMessage} disabled={loading || streaming} size="icon" className="bg-cyan-500 hover:bg-cyan-400 text-slate-900">
+            <Button onClick={sendMessage} disabled={loading || streaming} size="icon" className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 tour-send">
               <Send className="w-4 h-4" />
             </Button>
           </div>
