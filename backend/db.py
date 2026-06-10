@@ -68,3 +68,16 @@ def get_messages(conversation_id):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+def update_title(conversation_id, title):
+    conn = get_conn()
+    conn.execute("UPDATE conversations SET title = ? WHERE id = ?", (title, conversation_id))
+    conn.commit()
+    conn.close()
+
+def delete_conversation(conversation_id):
+    conn = get_conn()
+    conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+    conn.commit()
+    conn.close()

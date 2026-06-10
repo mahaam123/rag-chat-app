@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
-from rag import rag_answer, rag_answer_stream
-from db import init_db, create_conversation, add_message, get_conversations, get_messages
+from rag import rag_answer, rag_answer_stream, generate_title
+from db import init_db, create_conversation, add_message, get_conversations, get_messages, update_title, delete_conversation
 
 app = FastAPI()
 init_db()
@@ -63,3 +63,19 @@ class SaveMessage(BaseModel):
 def save_message(req: SaveMessage):
     add_message(req.conversation_id, req.role, req.text)
     return {"status": "saved"}
+
+class TitleRequest(BaseModel):
+    conversation_id: int
+    question: str
+    answer: str
+
+@app.post("/conversations/title")
+def set_title(req: TitleRequest):
+    title = generate_title(req.question, req.answer)
+    update_title(req.conversation_id, title)
+    return {"title": title}
+
+@app.delete("/conversations/{conversation_id}")
+def remove_conversation(conversation_id: int):
+    delete_conversation(conversation_id)
+    return {"status": "deleted"}
