@@ -84,3 +84,14 @@ def rag_answer_stream(question, k_retrieve=20, k_rerank=5):
     # stream the answer token by token
     for chunk in llm.stream(final_prompt):
         yield chunk
+
+def generate_title(question, answer):
+    prompt_text = (
+        "Generate a very short title (3-6 words, no quotes) summarizing this conversation:\n\n"
+        f"User: {question}\n"
+        f"Assistant: {answer[:300]}\n\n"
+        "Title:"
+    )
+    title = llm.invoke(prompt_text).strip()
+    # safety: keep it short, strip quotes
+    return title.replace('"', "").strip()[:60]
