@@ -48,11 +48,18 @@ else:
 llm = OllamaLLM(model="qwen3:4b", temperature=0)
 
 prompt = ChatPromptTemplate.from_template(
-    """You are a helpful assistant answering questions about the CIS Controls.
-Answer the question using ONLY the context below. If the context does not
-contain the answer, say so — do not make anything up.
+    """You are a knowledgeable assistant answering questions about the CIS Controls v8 framework.
 
-Context:
+Answer the question using ONLY the numbered context sources below.
+
+Guidelines for your answer:
+- Be clear, direct, and concise. Do not start with filler like "Based on the provided context" — just answer.
+- Use Markdown formatting: **bold** for key terms, bullet or numbered lists for multiple items, and short paragraphs.
+- When you use information from a source, cite it inline with its number in square brackets, like [1] or [2], placed right after the relevant statement.
+- Only cite sources you actually used.
+- If the context does not contain the answer, clearly say that the provided material does not cover it — do not make anything up.
+
+Context sources:
 {context}
 
 Question: {question}
@@ -73,20 +80,21 @@ def rag_answer(question, k_retrieve=20, k_rerank=5):
     return answer, sources
 
 def rag_answer_stream(question, k_retrieve=20, k_rerank=5):
-    # retrieve + rerank
     candidates = vectorstore.similarity_search(question, k=k_retrieve)
     pairs = [(question, doc.page_content) for doc in candidates]
     scores = reranker.predict(pairs)
     ranked = sorted(zip(scores, candidates), key=lambda x: x[0], reverse=True)
     top = [doc for score, doc in ranked[:k_rerank]]
-    context_text = "\n\n---\n\n".join(doc.page_content for doc in top)
+
+    # number the sources so the model can cite [1], [2], ...
+    context_text = "\n\n".join(
+        f"[{i+1}] {doc.page_content}" for i, doc in enumerate(top)
+    )
     final_prompt = prompt.format(context=context_text, question=question)
 
-    # stream the answer tokens
     for chunk in llm.stream(final_prompt):
         yield chunk
 
-    # after the answer, send a delimiter + the sources as JSON
     sources = [
         {"page": doc.metadata.get("page_number"), "text": doc.page_content}
         for doc in top
