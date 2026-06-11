@@ -1,4 +1,5 @@
 # rag.py
+import json
 import pickle
 import weaviate
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -72,7 +73,7 @@ def rag_answer(question, k_retrieve=20, k_rerank=5):
     return answer, sources
 
 def rag_answer_stream(question, k_retrieve=20, k_rerank=5):
-    # retrieve + rerank (same as before)
+    # retrieve + rerank
     candidates = vectorstore.similarity_search(question, k=k_retrieve)
     pairs = [(question, doc.page_content) for doc in candidates]
     scores = reranker.predict(pairs)
@@ -81,9 +82,16 @@ def rag_answer_stream(question, k_retrieve=20, k_rerank=5):
     context_text = "\n\n---\n\n".join(doc.page_content for doc in top)
     final_prompt = prompt.format(context=context_text, question=question)
 
-    # stream the answer token by token
+    # stream the answer tokens
     for chunk in llm.stream(final_prompt):
         yield chunk
+
+    # after the answer, send a delimiter + the sources as JSON
+    sources = [
+        {"page": doc.metadata.get("page_number"), "text": doc.page_content}
+        for doc in top
+    ]
+    yield "\n␞SOURCES␞\n" + json.dumps(sources)
 
 def generate_title(question, answer):
     prompt_text = (
