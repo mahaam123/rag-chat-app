@@ -13,7 +13,7 @@ A full-stack Retrieval-Augmented Generation (RAG) chat application that answers 
 - **Guided tour** — a first-visit walkthrough of the interface
 - **Conversation export** — download any conversation as Markdown or PDF
 - **Responsive layout** — adapts to small screens with a collapsible sidebar
-- **Delete history** - trash option to delete past conversations
+- **Delete history** — trash option to delete past conversations
 
 ## Architecture
 
