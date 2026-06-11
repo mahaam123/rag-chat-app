@@ -45,7 +45,7 @@ else:
         embedding=embeddings,
     )
 
-llm = OllamaLLM(model="qwen3:4b", temperature=0)
+llm = OllamaLLM(model="qwen3:4b", temperature=0.7)
 
 prompt = ChatPromptTemplate.from_template(
     """You are a knowledgeable assistant answering questions about the CIS Controls v8 framework.

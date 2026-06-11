@@ -1,12 +1,21 @@
 import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown } from "lucide-react"
+import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Joyride } from "react-joyride"
 
 type Source = { page: number | null; text: string }
-type Message = { role: "user" | "assistant"; text: string; sources?: Source[] }
+type Version = { text: string; sources: Source[] }
+type Message = {
+  id?: number
+  role: "user" | "assistant"
+  text: string
+  sources?: Source[]
+  versions?: Version[]
+  activeVersion?: number
+  question?: string
+}
 type Conversation = { id: number; title: string; created_at: string }
 
 const API = "http://localhost:8000"
@@ -105,7 +114,14 @@ function App() {
     try {
       const res = await fetch(`${API}/conversations/${id}`)
       const msgs = await res.json()
-      setMessages(msgs.map((m: any) => ({ role: m.role, text: m.text, sources: m.sources || [] })))
+      setMessages(msgs.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        text: m.text,
+        sources: m.sources || [],
+        versions: m.versions || undefined,
+        activeVersion: m.versions ? (m.versions.length - 1) : undefined,
+      })))
     } catch {}
   }
 
@@ -199,16 +215,44 @@ function App() {
 
       setMessages((prev) => {
         const updated = [...prev]
-        updated[updated.length - 1] = { role: "assistant", text: finalAnswer, sources }
+        updated[updated.length - 1] = {
+          role: "assistant",
+          text: finalAnswer,
+          sources,
+          question,
+          versions: [{ text: finalAnswer, sources }],
+          activeVersion: 0,
+        }
         return updated
       })
 
-      // save the assistant message (clean answer only)
+      // save the assistant message with its sources and versions and capture its DB id
       fetch(`${API}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_id: convId, role: "assistant", text: finalAnswer , sources }),
+        body: JSON.stringify({
+          conversation_id: convId,
+          role: "assistant",
+          text: finalAnswer,
+          sources,
+          versions: [{ text: finalAnswer, sources }],
+        }),
       })
+        .then((r) => r.json())
+        .then((data) => {
+          setMessages((prev) => {
+            const updated = [...prev]
+            // attach the id to the last assistant message
+            for (let k = updated.length - 1; k >= 0; k--) {
+              if (updated[k].role === "assistant" && !updated[k].id) {
+                updated[k] = { ...updated[k], id: data.id }
+                break
+              }
+            }
+            return updated
+          })
+        })
+        .catch(() => {})
 
       // generate a smart title in the background after the first exchange
       if (isFirstMessage) {
@@ -225,6 +269,82 @@ function App() {
       setStreaming(false)
     }
   }
+  async function regenerate(msgIndex: number) {
+    const msg = messages[msgIndex]
+    if (!msg.question || loading || streaming) return
+
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg.question }),
+      })
+      if (!res.body) throw new Error("No response body")
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let firstChunk = true
+      let accumulated = ""
+      const DELIM = "␞SOURCES␞"
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        accumulated += decoder.decode(value, { stream: true })
+
+        if (firstChunk) {
+          setLoading(false)
+          setStreaming(true)
+          firstChunk = false
+        }
+
+        const answerPart = accumulated.includes(DELIM) ? accumulated.split(DELIM)[0] : accumulated
+        // show the regenerating answer live in this message
+        setMessages((prev) => {
+          const updated = [...prev]
+          updated[msgIndex] = { ...updated[msgIndex], text: answerPart }
+          return updated
+        })
+      }
+
+      // parse final answer + sources
+      let finalAnswer = accumulated
+      let newSources: Source[] = []
+      if (accumulated.includes(DELIM)) {
+        const [ans, srcJson] = accumulated.split(DELIM)
+        finalAnswer = ans.trim()
+        try { newSources = JSON.parse(srcJson) } catch {}
+      }
+
+      // append as a new version, make it active, AND persist to DB
+      setMessages((prev) => {
+        const updated = [...prev]
+        const m = updated[msgIndex]
+        const newVersions = [...(m.versions || [{ text: m.text, sources: m.sources || [] }]), { text: finalAnswer, sources: newSources }]
+        updated[msgIndex] = {
+          ...m,
+          text: finalAnswer,
+          sources: newSources,
+          versions: newVersions,
+          activeVersion: newVersions.length - 1,
+        }
+        if (m.id) {
+          fetch(`${API}/messages/${m.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: finalAnswer, sources: newSources, versions: newVersions }),
+          }).catch(() => {})
+        }
+        return updated
+      })
+    } catch {
+    } finally {
+      setLoading(false)
+      setStreaming(false)
+    }
+  }
+
   const reasonOptions = ["Inaccurate", "Incomplete", "Off-topic", "Hard to understand", "Other"]
 
   async function submitFeedback(messageText: string, rating: string, reason?: string, comment?: string, msgIndex?: number) {
@@ -236,6 +356,23 @@ function App() {
       })
       if (msgIndex !== undefined) setFeedbackGiven((prev) => ({ ...prev, [msgIndex]: rating }))
     } catch {}
+  }
+
+  function switchVersion(msgIndex: number, direction: number) {
+    setMessages((prev) => {
+      const updated = [...prev]
+      const m = updated[msgIndex]
+      if (!m.versions || m.versions.length < 2) return prev
+      const current = m.activeVersion ?? 0
+      const next = Math.max(0, Math.min(m.versions.length - 1, current + direction))
+      updated[msgIndex] = {
+        ...m,
+        activeVersion: next,
+        text: m.versions[next].text,
+        sources: m.versions[next].sources,
+      }
+      return updated
+    })
   }
 
   function handleThumbsUp(messageText: string, msgIndex: number) {
@@ -409,6 +546,34 @@ function App() {
                         >
                           <ThumbsDown className="w-4 h-4" />
                         </button>
+                        <button
+                          onClick={() => regenerate(i)}
+                          className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-cyan-400"
+                          title="Regenerate response"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                        {msg.versions && msg.versions.length > 1 && (
+                          <div className="flex items-center gap-1 text-xs text-slate-400 ml-1">
+                            <button
+                              onClick={() => switchVersion(i, -1)}
+                              disabled={(msg.activeVersion ?? 0) === 0}
+                              className="px-1 hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              ‹
+                            </button>
+                            <span className="font-mono">
+                              {(msg.activeVersion ?? 0) + 1}/{msg.versions.length}
+                            </span>
+                            <button
+                              onClick={() => switchVersion(i, 1)}
+                              disabled={(msg.activeVersion ?? 0) === msg.versions.length - 1}
+                              className="px-1 hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              ›
+                            </button>
+                          </div>
+                        )}
                         {feedbackGiven[i] && <span className="text-xs text-slate-500">Thanks for your feedback</span>}
                       </div>
                     )}

@@ -25,6 +25,7 @@ def init_db():
             role TEXT,
             text TEXT,
             sources TEXT,
+            versions TEXT,
             created_at TEXT,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         )
@@ -69,15 +70,20 @@ def create_conversation(title="New conversation"):
     conn.close()
     return conv_id
 
-def add_message(conversation_id, role, text, sources=None):
+def add_message(conversation_id, role, text, sources=None, versions=None):
     import json
     conn = get_conn()
-    conn.execute(
-        "INSERT INTO messages (conversation_id, role, text, sources, created_at) VALUES (?, ?, ?, ?, ?)",
-        (conversation_id, role, text, json.dumps(sources) if sources else None, datetime.now().isoformat()),
+    cur = conn.execute(
+        "INSERT INTO messages (conversation_id, role, text, sources, versions, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (conversation_id, role, text,
+         json.dumps(sources) if sources else None,
+         json.dumps(versions) if versions else None,
+         datetime.now().isoformat()),
     )
     conn.commit()
+    msg_id = cur.lastrowid
     conn.close()
+    return msg_id
 
 def get_conversations():
     conn = get_conn()
@@ -99,12 +105,24 @@ def get_messages(conversation_id):
     for r in rows:
         d = dict(r)
         d["sources"] = json.loads(d["sources"]) if d.get("sources") else []
+        d["versions"] = json.loads(d["versions"]) if d.get("versions") else None
         result.append(d)
     return result
 
 def update_title(conversation_id, title):
     conn = get_conn()
     conn.execute("UPDATE conversations SET title = ? WHERE id = ?", (title, conversation_id))
+    conn.commit()
+    conn.close()
+
+def update_message(message_id, text, sources, versions):
+    import json
+    conn = get_conn()
+    conn.execute(
+        "UPDATE messages SET text = ?, sources = ?, versions = ? WHERE id = ?",
+        (text, json.dumps(sources) if sources else None,
+         json.dumps(versions) if versions else None, message_id),
+    )
     conn.commit()
     conn.close()
 
