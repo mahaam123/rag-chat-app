@@ -133,6 +133,7 @@ function App() {
 
   async function deleteConversation(id: number, e: React.MouseEvent) {
     e.stopPropagation() // don't trigger loadConversation
+    if (!window.confirm("Are you sure you want to delete this conversation?")) return
     try {
       await fetch(`${API}/conversations/${id}`, { method: "DELETE" })
       if (id === currentId) newChat()
