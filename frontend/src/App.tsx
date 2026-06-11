@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw, Menu, X } from "lucide-react"
+import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw, Menu, X, Download } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Joyride } from "react-joyride"
 
@@ -391,6 +391,39 @@ function App() {
     submitFeedback(feedbackModal.messageText, "down", feedbackReason, feedbackComment, feedbackModal.msgIndex)
     setFeedbackModal(null)
   }
+
+  function exportConversation() {
+    if (messages.length === 0) return
+
+    // build markdown from the conversation
+    const title = conversations.find((c) => c.id === currentId)?.title || "conversation"
+    let md = `# ${title}\n\n`
+    for (const m of messages) {
+      if (m.role === "user") {
+        md += `## You\n\n${m.text}\n\n`
+      } else {
+        md += `## Assistant\n\n${m.text}\n\n`
+        if (m.sources && m.sources.length > 0) {
+          md += `**Sources:**\n\n`
+          m.sources.forEach((s, idx) => {
+            const page = s.page != null ? `Page ${Math.round(s.page)}` : "Source"
+            md += `${idx + 1}. (${page}) ${s.text.slice(0, 200)}…\n`
+          })
+          md += `\n`
+        }
+      }
+    }
+
+    // trigger a download
+    const blob = new Blob([md], { type: "text/markdown" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${title.replace(/[^a-z0-9]/gi, "_")}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // messages to display: show greeting as an assistant bubble when empty
   const displayMessages: Message[] = messages.length === 0
     ? [{ role: "assistant", text: GREETING }]
@@ -508,6 +541,15 @@ function App() {
             <span className="font-mono text-xs uppercase tracking-widest text-cyan-400">CIS Controls</span>
             <span className="text-sm text-slate-400">Knowledge Assistant</span>
           </div>
+          {messages.length > 0 && (
+            <button
+              onClick={exportConversation}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-400/40 text-xs"
+              title="Export conversation as Markdown"
+            >
+              <Download className="w-4 h-4" /> Export
+            </button>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto px-4 py-8">
