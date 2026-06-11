@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw, Menu, X, Download } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Joyride } from "react-joyride"
+import jsPDF from "jspdf"
 
 type Source = { page: number | null; text: string }
 type Version = { text: string; sources: Source[] }
@@ -424,6 +425,62 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
+  function exportConversationPDF() {
+    if (messages.length === 0) return
+
+    const title = conversations.find((c) => c.id === currentId)?.title || "conversation"
+    const doc = new jsPDF()
+    const pageHeight = doc.internal.pageSize.height
+    const pageWidth = doc.internal.pageSize.width
+    const margin = 15
+    const maxWidth = pageWidth - margin * 2
+    let y = margin
+
+    // helper: add wrapped text, handling page breaks
+    function addText(text: string, fontSize: number, style: "normal" | "bold", color: [number, number, number]) {
+      doc.setFontSize(fontSize)
+      doc.setFont("helvetica", style)
+      doc.setTextColor(color[0], color[1], color[2])
+      const lines = doc.splitTextToSize(text, maxWidth)
+      for (const line of lines) {
+        if (y > pageHeight - margin) {
+          doc.addPage()
+          y = margin
+        }
+        doc.text(line, margin, y)
+        y += fontSize * 0.5
+      }
+    }
+
+    // title
+    addText(title, 16, "bold", [15, 23, 42])
+    y += 4
+
+    for (const m of messages) {
+      if (y > pageHeight - margin) { doc.addPage(); y = margin }
+      if (m.role === "user") {
+        addText("You", 12, "bold", [124, 58, 237])
+        addText(m.text, 11, "normal", [30, 41, 59])
+      } else {
+        addText("Assistant", 12, "bold", [8, 145, 178])
+        // strip citation markers like [1] for clean PDF text
+        const clean = m.text.replace(/\[\d+\]/g, "")
+        addText(clean, 11, "normal", [30, 41, 59])
+        if (m.sources && m.sources.length > 0) {
+          y += 2
+          addText("Sources:", 10, "bold", [100, 116, 139])
+          m.sources.forEach((s, idx) => {
+            const page = s.page != null ? `Page ${Math.round(s.page)}` : "Source"
+            addText(`${idx + 1}. (${page}) ${s.text.slice(0, 180)}...`, 9, "normal", [100, 116, 139])
+          })
+        }
+      }
+      y += 6
+    }
+
+    doc.save(`${title.replace(/[^a-z0-9]/gi, "_")}.pdf`)
+  }
+
   // messages to display: show greeting as an assistant bubble when empty
   const displayMessages: Message[] = messages.length === 0
     ? [{ role: "assistant", text: GREETING }]
@@ -542,13 +599,22 @@ function App() {
             <span className="text-sm text-slate-400">Knowledge Assistant</span>
           </div>
           {messages.length > 0 && (
-            <button
-              onClick={exportConversation}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-400/40 text-xs"
-              title="Export conversation as Markdown"
-            >
-              <Download className="w-4 h-4" /> Export
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={exportConversation}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-400/40 text-xs"
+                title="Export as Markdown"
+              >
+                <Download className="w-4 h-4" /> MD
+              </button>
+              <button
+                onClick={exportConversationPDF}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-400/40 text-xs"
+                title="Export as PDF"
+              >
+                <Download className="w-4 h-4" /> PDF
+              </button>
+            </div>
           )}
         </header>
 
