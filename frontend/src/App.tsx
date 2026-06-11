@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw, Menu, X, Download } from "lucide-react"
+import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw, Menu, X, Download, Columns2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Joyride } from "react-joyride"
 import jsPDF from "jspdf"
@@ -85,6 +85,7 @@ function App() {
   const [feedbackComment, setFeedbackComment] = useState("")
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, string>>({})
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [compareMode, setCompareMode] = useState<{ msgIndex: number; left: number; right: number } | null>(null)
 
   useEffect(() => {
     const seen = localStorage.getItem("tourSeen")
@@ -483,7 +484,10 @@ function App() {
 
     doc.save(`${title.replace(/[^a-z0-9]/gi, "_")}.pdf`)
   }
-
+  function openCompare(msgIndex: number, versionCount: number) {
+    // default: left = first version, right = last version
+    setCompareMode({ msgIndex, left: 0, right: versionCount - 1 })
+  }
   // messages to display: show greeting as an assistant bubble when empty
   const displayMessages: Message[] = messages.length === 0
     ? [{ role: "assistant", text: GREETING }]
@@ -698,7 +702,62 @@ function App() {
                             </button>
                           </div>
                         )}
+                        {msg.versions && msg.versions.length > 1 && (
+                          <button
+                            onClick={() => openCompare(i, msg.versions!.length)}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-500 hover:text-cyan-400 hover:bg-slate-800"
+                            title="Compare versions side by side"
+                          >
+                            <Columns2 className="w-3.5 h-3.5" /> Compare
+                          </button>
+                        )}
                         {feedbackGiven[i] && <span className="text-xs text-slate-500">Thanks for your feedback</span>}
+                      </div>
+                    )}
+                    {compareMode && compareMode.msgIndex === i && msg.versions && (
+                      <div className="mt-4 border border-slate-700 rounded-lg p-4 bg-slate-800/40">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-mono uppercase tracking-wider text-cyan-400">Compare versions</span>
+                          <button
+                            onClick={() => setCompareMode(null)}
+                            className="text-slate-500 hover:text-slate-200"
+                            title="Close comparison"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* LEFT side */}
+                          <div>
+                            <select
+                              value={compareMode.left}
+                              onChange={(e) => setCompareMode({ ...compareMode, left: parseInt(e.target.value) })}
+                              className="w-full mb-2 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-400/40"
+                            >
+                              {msg.versions.map((_, vi) => (
+                                <option key={vi} value={vi}>Version {vi + 1}</option>
+                              ))}
+                            </select>
+                            <div className="text-sm leading-relaxed text-slate-200 prose-chat border border-slate-700/50 rounded p-3 bg-slate-900/40">
+                              <CitedText text={msg.versions[compareMode.left].text} sources={msg.versions[compareMode.left].sources} />
+                            </div>
+                          </div>
+                          {/* RIGHT side */}
+                          <div>
+                            <select
+                              value={compareMode.right}
+                              onChange={(e) => setCompareMode({ ...compareMode, right: parseInt(e.target.value) })}
+                              className="w-full mb-2 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-400/40"
+                            >
+                              {msg.versions.map((_, vi) => (
+                                <option key={vi} value={vi}>Version {vi + 1}</option>
+                              ))}
+                            </select>
+                            <div className="text-sm leading-relaxed text-slate-200 prose-chat border border-slate-700/50 rounded p-3 bg-slate-900/40">
+                              <CitedText text={msg.versions[compareMode.right].text} sources={msg.versions[compareMode.right].sources} />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
