@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, ShieldCheck, Plus, MessageSquare, Trash2 } from "lucide-react"
@@ -11,6 +11,55 @@ type Conversation = { id: number; title: string; created_at: string }
 
 const API = "http://localhost:8000"
 const GREETING = "Ask a question about the CIS Controls v8 framework."
+
+function renderWithCitations(text: string, sources?: Source[]) {
+  const parts = text.split(/(\[\d+\])/g)
+  return parts.map((part, idx) => {
+    const match = part.match(/^\[(\d+)\]$/)
+    if (match) {
+      const n = parseInt(match[1], 10)
+      const src = sources?.[n - 1]
+      if (src) {
+        return (
+          <span key={idx} className="citation-chip">
+            {n}
+            <span className="citation-tooltip">
+              <span className="citation-page">
+                {src.page != null ? `Page ${Math.round(src.page)}` : "Source"}
+              </span>
+              {src.text.slice(0, 220)}…
+            </span>
+          </span>
+        )
+      }
+      return <span key={idx}>{part}</span>
+    }
+    return <span key={idx}>{part}</span>
+  })
+}
+
+function CitedText({ text, sources }: { text: string; sources?: Source[] }) {
+  return (
+    <ReactMarkdown
+      components={{
+        // intercept text nodes and inject citation chips inline
+        p: ({ children }) => <p>{processChildren(children, sources)}</p>,
+        li: ({ children }) => <li>{processChildren(children, sources)}</li>,
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  )
+}
+
+function processChildren(children: React.ReactNode, sources?: Source[]): React.ReactNode {
+  return React.Children.map(children, (child) => {
+    if (typeof child === "string") {
+      return renderWithCitations(child, sources)
+    }
+    return child
+  })
+}
 
 function App() {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -250,7 +299,7 @@ function App() {
                   <div className="border-l-2 border-cyan-400/70 pl-4">
                     <div className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80 mb-1.5">Assistant</div>
                     <div className="text-sm leading-relaxed text-slate-200 prose-chat">
-                      <ReactMarkdown>{msg.text + (streaming && i === displayMessages.length - 1 ? " ▋" : "")}</ReactMarkdown>
+                      <CitedText text={msg.text + (streaming && i === displayMessages.length - 1 ? " ▋" : "")} sources={msg.sources} />
                     </div>
                     {msg.sources && msg.sources.length > 0 && (
                       <details className="mt-3 group">

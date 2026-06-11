@@ -149,3 +149,57 @@
   margin: 0.5rem 0;
 }
 .prose-chat h1, .prose-chat h2, .prose-chat h3 { font-weight: 600; margin: 0.75rem 0 0.25rem; }
+
+/* Inline citation chips + tooltip */
+.citation-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3rem;
+  margin: 0 0.1rem;
+  font-size: 0.7rem;
+  font-family: monospace;
+  color: #0f172a;
+  background: #22d3ee;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  vertical-align: super;
+  line-height: 1;
+}
+.citation-chip .citation-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 140%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  max-width: 70vw;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.4;
+  text-align: left;
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.4rem;
+  z-index: 50;
+  transition: opacity 0.15s;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.citation-chip:hover .citation-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+.citation-tooltip .citation-page {
+  display: block;
+  color: #22d3ee;
+  font-family: monospace;
+  font-size: 0.65rem;
+  margin-bottom: 0.3rem;
+}
