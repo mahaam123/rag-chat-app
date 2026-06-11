@@ -24,6 +24,7 @@ def init_db():
             conversation_id INTEGER,
             role TEXT,
             text TEXT,
+            sources TEXT,
             created_at TEXT,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         )
@@ -43,11 +44,12 @@ def create_conversation(title="New conversation"):
     conn.close()
     return conv_id
 
-def add_message(conversation_id, role, text):
+def add_message(conversation_id, role, text, sources=None):
+    import json
     conn = get_conn()
     conn.execute(
-        "INSERT INTO messages (conversation_id, role, text, created_at) VALUES (?, ?, ?, ?)",
-        (conversation_id, role, text, datetime.now().isoformat()),
+        "INSERT INTO messages (conversation_id, role, text, sources, created_at) VALUES (?, ?, ?, ?, ?)",
+        (conversation_id, role, text, json.dumps(sources) if sources else None, datetime.now().isoformat()),
     )
     conn.commit()
     conn.close()
@@ -61,13 +63,19 @@ def get_conversations():
     return [dict(r) for r in rows]
 
 def get_messages(conversation_id):
+    import json
     conn = get_conn()
     rows = conn.execute(
         "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id ASC",
         (conversation_id,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["sources"] = json.loads(d["sources"]) if d.get("sources") else []
+        result.append(d)
+    return result
 
 def update_title(conversation_id, title):
     conn = get_conn()

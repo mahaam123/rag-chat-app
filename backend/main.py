@@ -58,10 +58,11 @@ class SaveMessage(BaseModel):
     conversation_id: int
     role: str
     text: str
+    sources: list | None = None
 
 @app.post("/messages")
 def save_message(req: SaveMessage):
-    add_message(req.conversation_id, req.role, req.text)
+    add_message(req.conversation_id, req.role, req.text, req.sources)
     return {"status": "saved"}
 
 class TitleRequest(BaseModel):

@@ -1,15 +1,65 @@
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, ShieldCheck, Plus, MessageSquare, Trash2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Joyride } from "react-joyride"
 
-type Message = { role: "user" | "assistant"; text: string }
+type Source = { page: number | null; text: string }
+type Message = { role: "user" | "assistant"; text: string; sources?: Source[] }
 type Conversation = { id: number; title: string; created_at: string }
 
 const API = "http://localhost:8000"
 const GREETING = "Ask a question about the CIS Controls v8 framework."
+
+function renderWithCitations(text: string, sources?: Source[]) {
+  const parts = text.split(/(\[\d+\])/g)
+  return parts.map((part, idx) => {
+    const match = part.match(/^\[(\d+)\]$/)
+    if (match) {
+      const n = parseInt(match[1], 10)
+      const src = sources?.[n - 1]
+      if (src) {
+        return (
+          <span key={idx} className="citation-chip">
+            {n}
+            <span className="citation-tooltip">
+              <span className="citation-page">
+                {src.page != null ? `Page ${Math.round(src.page)}` : "Source"}
+              </span>
+              {src.text.slice(0, 220)}…
+            </span>
+          </span>
+        )
+      }
+      return <span key={idx}>{part}</span>
+    }
+    return <span key={idx}>{part}</span>
+  })
+}
+
+function CitedText({ text, sources }: { text: string; sources?: Source[] }) {
+  return (
+    <ReactMarkdown
+      components={{
+        // intercept text nodes and inject citation chips inline
+        p: ({ children }) => <p>{processChildren(children, sources)}</p>,
+        li: ({ children }) => <li>{processChildren(children, sources)}</li>,
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  )
+}
+
+function processChildren(children: React.ReactNode, sources?: Source[]): React.ReactNode {
+  return React.Children.map(children, (child) => {
+    if (typeof child === "string") {
+      return renderWithCitations(child, sources)
+    }
+    return child
+  })
+}
 
 function App() {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -51,7 +101,7 @@ function App() {
     try {
       const res = await fetch(`${API}/conversations/${id}`)
       const msgs = await res.json()
-      setMessages(msgs.map((m: any) => ({ role: m.role, text: m.text })))
+      setMessages(msgs.map((m: any) => ({ role: m.role, text: m.text, sources: m.sources || [] })))
     } catch {}
   }
 
@@ -108,30 +158,52 @@ function App() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let firstChunk = true
-      let fullAnswer = ""
+      let accumulated = ""
+      const DELIM = "␞SOURCES␞"
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        fullAnswer += chunk
+        accumulated += decoder.decode(value, { stream: true })
+
         if (firstChunk) {
           setLoading(false)
           setStreaming(true)
           setMessages((prev) => [...prev, { role: "assistant", text: "" }])
           firstChunk = false
         }
+
+        const answerPart = accumulated.includes(DELIM)
+          ? accumulated.split(DELIM)[0]
+          : accumulated
+
         setMessages((prev) => {
           const updated = [...prev]
-          updated[updated.length - 1] = { role: "assistant", text: updated[updated.length - 1].text + chunk }
+          updated[updated.length - 1] = { ...updated[updated.length - 1], role: "assistant", text: answerPart }
           return updated
         })
       }
 
+      // after streaming, split answer from sources
+      let finalAnswer = accumulated
+      let sources: Source[] = []
+      if (accumulated.includes(DELIM)) {
+        const [ans, srcJson] = accumulated.split(DELIM)
+        finalAnswer = ans.trim()
+        try { sources = JSON.parse(srcJson) } catch {}
+      }
+
+      setMessages((prev) => {
+        const updated = [...prev]
+        updated[updated.length - 1] = { role: "assistant", text: finalAnswer, sources }
+        return updated
+      })
+
+      // save the assistant message (clean answer only)
       fetch(`${API}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_id: convId, role: "assistant", text: fullAnswer }),
+        body: JSON.stringify({ conversation_id: convId, role: "assistant", text: finalAnswer , sources }),
       })
 
       // generate a smart title in the background after the first exchange
@@ -139,7 +211,7 @@ function App() {
         fetch(`${API}/conversations/title`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ conversation_id: convId, question, answer: fullAnswer }),
+          body: JSON.stringify({ conversation_id: convId, question, answer: finalAnswer }),
         }).then(() => fetchConversations())
       }
     } catch {
@@ -227,8 +299,27 @@ function App() {
                   <div className="border-l-2 border-cyan-400/70 pl-4">
                     <div className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80 mb-1.5">Assistant</div>
                     <div className="text-sm leading-relaxed text-slate-200 prose-chat">
-                      <ReactMarkdown>{msg.text + (streaming && i === displayMessages.length - 1 ? " ▋" : "")}</ReactMarkdown>
+                      <CitedText text={msg.text + (streaming && i === displayMessages.length - 1 ? " ▋" : "")} sources={msg.sources} />
                     </div>
+                    {msg.sources && msg.sources.length > 0 && (
+                      <details className="mt-3 group">
+                        <summary className="cursor-pointer text-xs font-mono uppercase tracking-wider text-slate-400 hover:text-cyan-400 select-none">
+                          {msg.sources.length} sources
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          {msg.sources.map((src, si) => (
+                            <div key={si} className="text-xs bg-slate-800/60 border border-slate-700/60 rounded-md p-3">
+                              <div className="font-mono text-cyan-400/70 mb-1">
+                                {src.page != null ? `Page ${Math.round(src.page)}` : "Source"}
+                              </div>
+                              <div className="text-slate-400 leading-relaxed line-clamp-3">
+                                {src.text}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 )}
               </div>
