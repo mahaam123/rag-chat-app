@@ -113,6 +113,7 @@ function App() {
 
   async function loadConversation(id: number) {
     setCurrentId(id)
+    setFeedbackGiven({})
     try {
       const res = await fetch(`${API}/conversations/${id}`)
       const msgs = await res.json()
@@ -130,6 +131,7 @@ function App() {
   function newChat() {
     setCurrentId(null)
     setMessages([])
+    setFeedbackGiven({})
   }
 
   async function deleteConversation(id: number, e: React.MouseEvent) {
