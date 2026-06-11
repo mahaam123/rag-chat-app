@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw } from "lucide-react"
+import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown, RotateCcw, Menu, X } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Joyride } from "react-joyride"
 
@@ -83,6 +83,7 @@ function App() {
   const [feedbackReason, setFeedbackReason] = useState("")
   const [feedbackComment, setFeedbackComment] = useState("")
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, string>>({})
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     const seen = localStorage.getItem("tourSeen")
@@ -455,8 +456,14 @@ function App() {
         </div>
       )}
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 border-r border-slate-700/60 flex flex-col tour-sidebar">
-        <div className="p-3">
+      <aside className={`${sidebarOpen ? "flex" : "hidden"} md:flex w-64 shrink-0 border-r border-slate-700/60 flex-col tour-sidebar fixed md:relative z-40 h-full bg-slate-900`}>
+        <div className="p-3 flex items-center gap-2">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-2 text-slate-400 hover:text-slate-100"
+          >
+            <X className="w-4 h-4" />
+          </button>
           <button
             onClick={newChat}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-sm font-medium tour-newchat"
@@ -490,6 +497,12 @@ function App() {
       {/* Main */}
       <div className="flex-1 flex flex-col">
         <header className="flex items-center gap-3 px-6 py-4 border-b border-slate-700/60">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden p-1 text-slate-400 hover:text-slate-100"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
           <ShieldCheck className="w-5 h-5 text-cyan-400" />
           <div className="flex flex-col">
             <span className="font-mono text-xs uppercase tracking-widest text-cyan-400">CIS Controls</span>
