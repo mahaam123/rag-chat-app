@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, ShieldCheck, Plus, MessageSquare, Trash2 } from "lucide-react"
+import { Send, ShieldCheck, Plus, MessageSquare, Trash2, ThumbsUp, ThumbsDown } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Joyride } from "react-joyride"
 
@@ -70,6 +70,10 @@ function App() {
   const [streaming, setStreaming] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [runTour, setRunTour] = useState(false)
+  const [feedbackModal, setFeedbackModal] = useState<{ messageText: string; msgIndex: number } | null>(null)
+  const [feedbackReason, setFeedbackReason] = useState("")
+  const [feedbackComment, setFeedbackComment] = useState("")
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, string>>({})
 
   useEffect(() => {
     const seen = localStorage.getItem("tourSeen")
@@ -221,7 +225,34 @@ function App() {
       setStreaming(false)
     }
   }
+  const reasonOptions = ["Inaccurate", "Incomplete", "Off-topic", "Hard to understand", "Other"]
 
+  async function submitFeedback(messageText: string, rating: string, reason?: string, comment?: string, msgIndex?: number) {
+    try {
+      await fetch(`${API}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_id: currentId, message_text: messageText, rating, reason, comment }),
+      })
+      if (msgIndex !== undefined) setFeedbackGiven((prev) => ({ ...prev, [msgIndex]: rating }))
+    } catch {}
+  }
+
+  function handleThumbsUp(messageText: string, msgIndex: number) {
+    submitFeedback(messageText, "up", undefined, undefined, msgIndex)
+  }
+
+  function handleThumbsDown(messageText: string, msgIndex: number) {
+    setFeedbackModal({ messageText, msgIndex })
+    setFeedbackReason("")
+    setFeedbackComment("")
+  }
+
+  function submitThumbsDown() {
+    if (!feedbackReason || !feedbackModal) return
+    submitFeedback(feedbackModal.messageText, "down", feedbackReason, feedbackComment, feedbackModal.msgIndex)
+    setFeedbackModal(null)
+  }
   // messages to display: show greeting as an assistant bubble when empty
   const displayMessages: Message[] = messages.length === 0
     ? [{ role: "assistant", text: GREETING }]
@@ -244,6 +275,48 @@ function App() {
           last: "Done",
         }}
       />
+      {feedbackModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setFeedbackModal(null)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-medium text-slate-100 mb-1">What went wrong?</h3>
+            <p className="text-xs text-slate-400 mb-4">Please select a reason (required).</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {reasonOptions.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setFeedbackReason(r)}
+                  className={`px-3 py-1.5 rounded-full text-xs border ${
+                    feedbackReason === r
+                      ? "bg-cyan-500 border-cyan-500 text-slate-900"
+                      : "border-slate-600 text-slate-300 hover:border-slate-500"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={feedbackComment}
+              onChange={(e) => setFeedbackComment(e.target.value)}
+              placeholder="Additional comments (optional)…"
+              className="w-full bg-slate-900 border border-slate-700 rounded-md p-2 text-sm text-slate-100 placeholder:text-slate-500 mb-4 resize-none focus:outline-none focus:ring-1 focus:ring-cyan-400/40"
+              rows={3}
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setFeedbackModal(null)} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200">
+                Cancel
+              </button>
+              <button
+                onClick={submitThumbsDown}
+                disabled={!feedbackReason}
+                className="px-4 py-2 text-sm rounded-md bg-cyan-500 text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-cyan-400"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Sidebar */}
       <aside className="w-64 shrink-0 border-r border-slate-700/60 flex flex-col tour-sidebar">
         <div className="p-3">
@@ -319,6 +392,25 @@ function App() {
                           ))}
                         </div>
                       </details>
+                    )}
+                    {msg.text && !(streaming && i === displayMessages.length - 1) && messages.length > 0 && (
+                      <div className="flex items-center gap-2 mt-3">
+                        <button
+                          onClick={() => handleThumbsUp(msg.text, i)}
+                          className={`p-1.5 rounded hover:bg-slate-800 ${feedbackGiven[i] === "up" ? "text-cyan-400" : "text-slate-500"}`}
+                          title="Helpful"
+                        >
+                          <ThumbsUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleThumbsDown(msg.text, i)}
+                          className={`p-1.5 rounded hover:bg-slate-800 ${feedbackGiven[i] === "down" ? "text-red-400" : "text-slate-500"}`}
+                          title="Not helpful"
+                        >
+                          <ThumbsDown className="w-4 h-4" />
+                        </button>
+                        {feedbackGiven[i] && <span className="text-xs text-slate-500">Thanks for your feedback</span>}
+                      </div>
                     )}
                   </div>
                 )}

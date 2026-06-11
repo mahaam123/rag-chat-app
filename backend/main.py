@@ -4,10 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from rag import rag_answer, rag_answer_stream, generate_title
-from db import init_db, create_conversation, add_message, get_conversations, get_messages, update_title, delete_conversation
+from db import init_db, init_feedback, create_conversation, add_message, get_conversations, get_messages, update_title, delete_conversation, add_feedback
 
 app = FastAPI()
 init_db()
+init_feedback()
 
 # Allow the frontend (localhost:5173) to call this API
 app.add_middleware(
@@ -80,3 +81,15 @@ def set_title(req: TitleRequest):
 def remove_conversation(conversation_id: int):
     delete_conversation(conversation_id)
     return {"status": "deleted"}
+
+class FeedbackRequest(BaseModel):
+    conversation_id: int | None = None
+    message_text: str
+    rating: str
+    reason: str | None = None
+    comment: str | None = None
+
+@app.post("/feedback")
+def save_feedback(req: FeedbackRequest):
+    add_feedback(req.conversation_id, req.message_text, req.rating, req.reason, req.comment)
+    return {"status": "saved"}

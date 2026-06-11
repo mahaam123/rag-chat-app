@@ -32,6 +32,31 @@ def init_db():
     conn.commit()
     conn.close()
     print("Database ready.")
+    
+def init_feedback():
+    conn = get_conn()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER,
+            message_text TEXT,
+            rating TEXT,
+            reason TEXT,
+            comment TEXT,
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def add_feedback(conversation_id, message_text, rating, reason=None, comment=None):
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO feedback (conversation_id, message_text, rating, reason, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (conversation_id, message_text, rating, reason, comment, datetime.now().isoformat()),
+    )
+    conn.commit()
+    conn.close()
 
 def create_conversation(title="New conversation"):
     conn = get_conn()
