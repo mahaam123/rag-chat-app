@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from rag import rag_answer, rag_answer_stream, generate_title
-from db import init_db, init_feedback, create_conversation, add_message, get_conversations, get_messages, update_title, delete_conversation, add_feedback
+from db import init_db, init_feedback, create_conversation, add_message, update_message, get_conversations, get_messages, update_title, delete_conversation, add_feedback
 
 app = FastAPI()
 init_db()
@@ -60,11 +60,12 @@ class SaveMessage(BaseModel):
     role: str
     text: str
     sources: list | None = None
+    versions: list | None = None
 
 @app.post("/messages")
 def save_message(req: SaveMessage):
-    add_message(req.conversation_id, req.role, req.text, req.sources)
-    return {"status": "saved"}
+    msg_id = add_message(req.conversation_id, req.role, req.text, req.sources, req.versions)
+    return {"status": "saved", "id": msg_id}
 
 class TitleRequest(BaseModel):
     conversation_id: int
@@ -93,3 +94,13 @@ class FeedbackRequest(BaseModel):
 def save_feedback(req: FeedbackRequest):
     add_feedback(req.conversation_id, req.message_text, req.rating, req.reason, req.comment)
     return {"status": "saved"}
+
+class UpdateMessage(BaseModel):
+    text: str
+    sources: list | None = None
+    versions: list | None = None
+
+@app.put("/messages/{message_id}")
+def update_message_endpoint(message_id: int, req: UpdateMessage):
+    update_message(message_id, req.text, req.sources, req.versions)
+    return {"status": "updated"}
